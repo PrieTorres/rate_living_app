@@ -5,6 +5,7 @@ import '../../services/local_store.dart';
 import '../../models/rating.dart';
 
 final modeProvider = StateProvider<Mode>((ref) => Mode.rent);
+final legendVisibleProvider = StateProvider<bool>((ref) => false);
 
 final _areasMockProvider = FutureProvider<List<AreaFeature>>((ref) async {
   final api = MockApi();

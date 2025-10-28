@@ -10,6 +10,8 @@ import 'widgets/legend.dart';
 import 'widgets/mode_toggle.dart';
 import 'widgets/add_rating_sheet.dart';
 import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MapPage extends ConsumerStatefulWidget {
   const MapPage({super.key});
@@ -25,10 +27,38 @@ class _MapPageState extends ConsumerState<MapPage> {
   Widget build(BuildContext context) {
     final mode = ref.watch(modeProvider);
     final areasAsync = ref.watch(areasProvider);
+    final legendVisible = ref.watch(legendVisibleProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Rate Living – Mapa')),
-      floatingActionButton: _helpFab(context),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'legendFab',
+            onPressed: () {
+              final current = ref.read(legendVisibleProvider);
+              ref.read(legendVisibleProvider.notifier).state = !current;
+            },
+            icon: Icon(legendVisible ? Icons.visibility_off : Icons.visibility),
+            label: Text(legendVisible ? 'Ocultar legenda' : 'Mostrar legenda'),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: 'hintFab',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Dica: pressione e segure no mapa para adicionar uma avaliação.',
+                  ),
+                ),
+              );
+            },
+            child: const Icon(Icons.touch_app),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           areasAsync.when(
@@ -51,9 +81,12 @@ class _MapPageState extends ConsumerState<MapPage> {
             left: 12,
             child: Row(
               children: [
-                ModeToggle(value: mode, onChanged: (m) => ref.read(modeProvider.notifier).state = m),
+                ModeToggle(
+                  value: mode,
+                  onChanged: (m) => ref.read(modeProvider.notifier).state = m,
+                ),
                 const SizedBox(width: 12),
-                Legend(mode: mode),
+                if (legendVisible) Legend(mode: mode),
               ],
             ),
           ),
@@ -62,28 +95,26 @@ class _MapPageState extends ConsumerState<MapPage> {
     );
   }
 
-  Widget _helpFab(BuildContext context) {
-    return Tooltip(
-      message: 'Pressione e segure no mapa para adicionar uma avaliação',
-      child: const Icon(Icons.touch_app),
-    );
-  }
-
   Set<Polygon> _buildPolygons(List<AreaFeature> areas, Mode mode) {
+    final legendVisible = ref.watch(legendVisibleProvider);
     final set = <Polygon>{};
     for (final a in areas) {
       final price = mode == Mode.rent ? a.avgRent : a.avgBuy;
       final color = priceToColor(mode, price);
       final path = a.polygon.map((p) => LatLng(p[0], p[1])).toList();
-      set.add(Polygon(
-        polygonId: PolygonId(a.id),
-        points: path,
-        strokeColor: const Color(0xFF111827),
-        strokeWidth: 1,
-        fillColor: Color(color).withOpacity(0.55),
-        consumeTapEvents: true,
-        onTap: () => _showAreaInfo(a, mode),
-      ));
+      if (legendVisible) {
+        set.add(
+          Polygon(
+            polygonId: PolygonId(a.id),
+            points: path,
+            strokeColor: const Color(0xFF111827),
+            strokeWidth: 1,
+            fillColor: Color(color).withOpacity(0.55),
+            consumeTapEvents: true,
+            onTap: () => _showAreaInfo(a, mode),
+          ),
+        );
+      }
     }
     return set;
   }
@@ -92,36 +123,47 @@ class _MapPageState extends ConsumerState<MapPage> {
     final markers = <Marker>{};
     for (final a in areas) {
       for (final r in a.ratings) {
-        markers.add(Marker(
-          markerId: MarkerId(r.id),
-          position: LatLng(r.lat, r.lng),
-          infoWindow: InfoWindow(
-            title: '⭐' * r.score + '☆' * (5 - r.score),
-            snippet: r.comment ?? '',
+        markers.add(
+          Marker(
+            markerId: MarkerId(r.id),
+            position: LatLng(r.lat, r.lng),
+            infoWindow: InfoWindow(
+              title: '⭐' * r.score + '☆' * (5 - r.score),
+              snippet: r.comment ?? '',
+            ),
           ),
-        ));
+        );
       }
     }
     return markers;
   }
 
   void _showAreaInfo(AreaFeature a, Mode mode) {
-    final lat = a.polygon.map((p) => p[0]).reduce((v, e) => v + e) / a.polygon.length;
-    final lng = a.polygon.map((p) => p[1]).reduce((v, e) => v + e) / a.polygon.length;
+    final lat =
+        a.polygon.map((p) => p[0]).reduce((v, e) => v + e) / a.polygon.length;
+    final lng =
+        a.polygon.map((p) => p[1]).reduce((v, e) => v + e) / a.polygon.length;
     final price = mode == Mode.rent ? a.avgRent : a.avgBuy;
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(a.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(
+              a.name,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 8),
-            Text('Média (${mode == Mode.rent ? 'aluguel' : 'compra'}): R\$ ${price.toStringAsFixed(0)}'),
+            Text(
+              'Média (${mode == Mode.rent ? 'aluguel' : 'compra'}): R\$ ${price.toStringAsFixed(0)}',
+            ),
             Text('Avaliações: ${a.ratings.length}'),
           ],
         ),
@@ -129,7 +171,11 @@ class _MapPageState extends ConsumerState<MapPage> {
     );
   }
 
-  Future<void> _onLongPressAddRating(BuildContext context, List<AreaFeature> areas, LatLng pos) async {
+  Future<void> _onLongPressAddRating(
+    BuildContext context,
+    List<AreaFeature> areas,
+    LatLng pos,
+  ) async {
     AreaFeature? target;
     for (final a in areas) {
       if (pointInPolygon(pos.latitude, pos.longitude, a.polygon)) {
@@ -150,9 +196,13 @@ class _MapPageState extends ConsumerState<MapPage> {
     final result = await showModalBottomSheet<AddRatingResult>(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: AddRatingSheet(areaName: target!.name),
       ),
     );
@@ -171,8 +221,8 @@ class _MapPageState extends ConsumerState<MapPage> {
 
     if (!mounted) return;
     ref.invalidate(areasProvider);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Avaliação adicionada!')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Avaliação adicionada!')));
   }
 }
