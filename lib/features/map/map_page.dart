@@ -28,6 +28,7 @@ class _MapPageState extends ConsumerState<MapPage> {
     final mode = ref.watch(modeProvider);
     final areasAsync = ref.watch(areasProvider);
     final legendVisible = ref.watch(legendVisibleProvider);
+    final addMode = ref.watch(addRatingModeProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Rate Living – Mapa')),
@@ -47,13 +48,8 @@ class _MapPageState extends ConsumerState<MapPage> {
           FloatingActionButton(
             heroTag: 'hintFab',
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Dica: pressione e segure no mapa para adicionar uma avaliação.',
-                  ),
-                ),
-              );
+              final current = ref.read(addRatingModeProvider);
+              ref.read(addRatingModeProvider.notifier).state = !current;
             },
             child: const Icon(Icons.touch_app),
           ),
@@ -70,7 +66,11 @@ class _MapPageState extends ConsumerState<MapPage> {
               zoomControlsEnabled: false,
               polygons: _buildPolygons(areas, mode),
               markers: _buildMarkers(areas),
-              onLongPress: (pos) => _onLongPressAddRating(context, areas, pos),
+              onTap: (pos) {
+                if (addMode) {
+                  _onTapAddRating(context, areas, pos);
+                }
+              },
             ),
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, st) => Center(child: Text('Erro: $e')),
@@ -90,6 +90,28 @@ class _MapPageState extends ConsumerState<MapPage> {
               ],
             ),
           ),
+          if (addMode)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Modo adicionar ativo',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -171,11 +193,25 @@ class _MapPageState extends ConsumerState<MapPage> {
     );
   }
 
-  Future<void> _onLongPressAddRating(
+  Future<void> _onTapAddRating(
     BuildContext context,
     List<AreaFeature> areas,
     LatLng pos,
   ) async {
+    // Mesmo fluxo do long-press: detectar bairro + abrir sheet + salvar
+    await _handleAddRatingFlow(context, areas, pos);
+    // Desativa o modo após tentar adicionar (salvou ou cancelou)
+    if (mounted) {
+      ref.read(addRatingModeProvider.notifier).state = false;
+    }
+  }
+
+  Future<void> _handleAddRatingFlow(
+    BuildContext context,
+    List<AreaFeature> areas,
+    LatLng pos,
+  ) async {
+    // 1) identificar bairro
     AreaFeature? target;
     for (final a in areas) {
       if (pointInPolygon(pos.latitude, pos.longitude, a.polygon)) {
@@ -183,7 +219,6 @@ class _MapPageState extends ConsumerState<MapPage> {
         break;
       }
     }
-
     if (target == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -192,6 +227,7 @@ class _MapPageState extends ConsumerState<MapPage> {
       return;
     }
 
+    // 2) abrir o sheet
     if (!mounted) return;
     final result = await showModalBottomSheet<AddRatingResult>(
       context: context,
@@ -206,9 +242,9 @@ class _MapPageState extends ConsumerState<MapPage> {
         child: AddRatingSheet(areaName: target!.name),
       ),
     );
-
     if (result == null) return;
 
+    // 3) salvar localmente
     final store = ref.read(localStoreProvider);
     final newRating = Rating(
       id: 'local_${DateTime.now().millisecondsSinceEpoch}',
@@ -219,6 +255,7 @@ class _MapPageState extends ConsumerState<MapPage> {
     );
     await store.add(target.id, newRating);
 
+    // 4) refresh + feedback
     if (!mounted) return;
     ref.invalidate(areasProvider);
     ScaffoldMessenger.of(
