@@ -47,13 +47,13 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBFf3XVRN3ErEVuzIKb2J3AvYrpNVch9WQ',
-    appId: '1:776901487708:web:7af4bcf2e9c146b7b14a99',
-    messagingSenderId: '776901487708',
-    projectId: 'rateliving',
-    authDomain: 'rateliving.firebaseapp.com',
-    storageBucket: 'rateliving.firebasestorage.app',
-    measurementId: 'G-PYBLTYRVG1',
+    apiKey: "AIzaSyBFf3XVRN3ErEVuzIKb2J3AvYrpNVch9WQ",
+    authDomain: "rateliving.firebaseapp.com",
+    projectId: "rateliving",
+    storageBucket: "rateliving.firebasestorage.app",
+    messagingSenderId: "776901487708",
+    appId: "1:776901487708:web:7af4bcf2e9c146b7b14a99",
+    measurementId: "G-PYBLTYRVG1",
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -61,16 +61,16 @@ class DefaultFirebaseOptions {
     appId: '1:776901487708:android:c07d0d29ff76e4deb14a99',
     messagingSenderId: '776901487708',
     projectId: 'rateliving',
-    storageBucket: 'rateliving.firebasestorage.app',
+    storageBucket: 'rateliving.firebasestorage.app'
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBFf3XVRN3ErEVuzIKb2J3AvYrpNVch9WQ',
-    appId: '1:776901487708:web:3e0650f3ca9a9a27b14a99',
-    messagingSenderId: '776901487708',
-    projectId: 'rateliving',
-    authDomain: 'rateliving.firebaseapp.com',
-    storageBucket: 'rateliving.firebasestorage.app',
-    measurementId: 'G-R7FHDJ8WB2',
+    apiKey: "AIzaSyBFf3XVRN3ErEVuzIKb2J3AvYrpNVch9WQ",
+    authDomain: "rateliving.firebaseapp.com",
+    projectId: "rateliving",
+    storageBucket: "rateliving.firebasestorage.app",
+    messagingSenderId: "776901487708",
+    appId: "1:776901487708:web:3e0650f3ca9a9a27b14a99",
+    measurementId: "G-R7FHDJ8WB2",
   );
 }
