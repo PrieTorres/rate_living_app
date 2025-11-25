@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:rate_living_app/features/map/map_controller.dart';
 import '../../../models/area_feature.dart';
 import '../../../utils/price_color.dart';
 
 class Legend extends StatelessWidget {
-  final Mode mode;
+  final PriceMode mode;
   const Legend({super.key, required this.mode});
 
   @override
