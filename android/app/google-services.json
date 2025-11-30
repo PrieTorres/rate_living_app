@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "776901487708",
+    "project_id": "rateliving",
+    "storage_bucket": "rateliving.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776901487708:android:c07d0d29ff76e4deb14a99",
+        "android_client_info": {
+          "package_name": "com.example.rate_living_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDkmiqTvcwqpI2YuTiFJf6oAii0CHIY5Vw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

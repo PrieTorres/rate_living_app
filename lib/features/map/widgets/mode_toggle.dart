@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:rate_living_app/features/map/map_controller.dart';
 import '../../../models/area_feature.dart';
 
 class ModeToggle extends StatelessWidget {
-  final Mode value;
-  final ValueChanged<Mode> onChanged;
+  final PriceMode value;
+  final ValueChanged<PriceMode> onChanged;
   const ModeToggle({super.key, required this.value, required this.onChanged});
 
   @override
@@ -16,14 +17,14 @@ class ModeToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _button(context, 'Aluguel', Mode.rent),
-          _button(context, 'Compra', Mode.buy),
+          _button(context, 'Aluguel', PriceMode.rent),
+          _button(context, 'Compra', PriceMode.buy),
         ],
       ),
     );
   }
 
-  Widget _button(BuildContext ctx, String label, Mode m) {
+  Widget _button(BuildContext ctx, String label, PriceMode m) {
     final selected = value == m;
     return InkWell(
       onTap: () => onChanged(m),

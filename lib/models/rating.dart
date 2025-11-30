@@ -2,7 +2,7 @@ class Rating {
   final String id;
   final double lat;
   final double lng;
-  final int score; // 1..5
+  final int score;
   final String? comment;
 
   Rating({

@@ -1,3 +1,5 @@
+import 'package:rate_living_app/features/map/map_controller.dart';
+
 import '../models/area_feature.dart';
 
 const _stopsRent = [1500, 2200, 2800, 3500];
@@ -11,7 +13,7 @@ const _palette = [
   0xFF01579B,
 ];
 
-int priceToColor(Mode mode, int value) {
+int priceToColor(PriceMode mode, int value) {
   final s = mode == Mode.rent ? _stopsRent : _stopsBuy;
   if (value <= s[0]) return _palette[0];
   if (value <= s[1]) return _palette[1];
@@ -20,7 +22,7 @@ int priceToColor(Mode mode, int value) {
   return _palette[4];
 }
 
-List<Map<String, dynamic>> legend(Mode mode) {
+List<Map<String, dynamic>> legend(PriceMode mode) {
   final s = mode == Mode.rent ? _stopsRent : _stopsBuy;
   String fmt(num n) => 'R\$ ${n.toStringAsFixed(0)}';
   return [
