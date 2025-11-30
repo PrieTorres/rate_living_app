@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import '../models/area_feature.dart';
 import '../models/rating.dart';
@@ -38,7 +39,11 @@ final List<AreaFeature> mockAreas = [
 ];
 
 Future<void> seedMockAreasToFirestore() async {
-  final db = FirebaseFirestore.instance;
+  final app = Firebase.app();
+  final db = FirebaseFirestore.instanceFor(
+    app: app,
+    databaseId: 'ratelivingdb',
+  );
 
   print('🔥 [SEED] Iniciando seed de áreas mockadas...');
 

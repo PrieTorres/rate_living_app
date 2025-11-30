@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import '../data/mock_seed.dart';
-import '../debug_firestore_ping.dart';
 
 class SeedPage extends StatefulWidget {
   const SeedPage({super.key});
@@ -26,7 +26,12 @@ class _SeedPageState extends State<SeedPage> {
   Future<void> _runPing() async {
     _append('🧪 Rodando ping Firestore...');
     try {
-      final db = FirebaseFirestore.instance;
+      final app = Firebase.app();
+      final db = FirebaseFirestore.instanceFor(
+        app: app,
+        databaseId: 'ratelivingdb',
+      );
+
       await db.collection('debug').doc('ping').set({
         'ok': true,
         'time': FieldValue.serverTimestamp(),

@@ -1,9 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../models/area_feature.dart';
 import '../models/rating.dart';
 
 class FirestoreApi {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  late final FirebaseFirestore _db;
+
+  FirestoreApi() {
+    final app = Firebase.app();
+    _db = FirebaseFirestore.instanceFor(
+      app: app,
+      databaseId: 'ratelivingdb',
+    );
+  }
 
   Future<List<AreaFeature>> fetchAreas() async {
     final areasSnap = await _db.collection('areas').get();
