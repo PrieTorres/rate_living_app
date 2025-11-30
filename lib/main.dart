@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
 import 'app.dart';
-import 'data/mock_seed.dart'; // 👈 importa o seed
+import 'data/mock_seed.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
