@@ -11,7 +11,7 @@ class FirestoreApi {
     final app = Firebase.app();
     _db = FirebaseFirestore.instanceFor(
       app: app,
-      databaseId: 'ratelivingdb', // ajuste aqui se tiver outro nome
+      databaseId: 'ratelivingdb',
     );
   }
 

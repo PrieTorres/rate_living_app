@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class AddRatingResult {
   final int score;
@@ -15,6 +16,9 @@ class AddRatingResult {
   final double? areaM2;
   final int? bathrooms;
 
+  /// Imagens escolhidas localmente para upload
+  final List<XFile> localImages;
+
   const AddRatingResult({
     required this.score,
     this.comment,
@@ -28,6 +32,7 @@ class AddRatingResult {
     this.bedrooms,
     this.areaM2,
     this.bathrooms,
+    required this.localImages,
   });
 }
 
@@ -68,6 +73,9 @@ class _AddRatingSheetState extends State<AddRatingSheet> {
   late String _locationType;
   String? _errorText;
 
+  final _picker = ImagePicker();
+  final List<XFile> _images = [];
+
   @override
   void initState() {
     super.initState();
@@ -95,13 +103,27 @@ class _AddRatingSheetState extends State<AddRatingSheet> {
     super.dispose();
   }
 
+  Future<void> _pickImages() async {
+    try {
+      final picked = await _picker.pickMultiImage();
+      if (picked.isEmpty) return;
+      setState(() {
+        _images.addAll(picked);
+      });
+    } catch (e) {
+      setState(() {
+        _errorText = 'Erro ao selecionar imagens: $e';
+      });
+    }
+  }
+
   void _submit() {
     final address = _addressController.text.trim();
     final cep = _cepController.text.trim();
 
     if (address.isEmpty || cep.isEmpty) {
       setState(() {
-        _errorText = 'Preencha pelo menos endereço e CEP.';
+        _errorText = 'Preencha endereço e CEP.';
       });
       return;
     }
@@ -159,6 +181,7 @@ class _AddRatingSheetState extends State<AddRatingSheet> {
         bedrooms: bedrooms,
         areaM2: areaM2,
         bathrooms: bathrooms,
+        localImages: List<XFile>.from(_images),
       ),
     );
   }
@@ -347,17 +370,32 @@ class _AddRatingSheetState extends State<AddRatingSheet> {
             const SizedBox(height: 12),
 
             // Fotos
-            const Text('URLs de fotos (opcional)'),
+            const Text('Fotos do local (opcional)'),
             const SizedBox(height: 4),
             TextField(
               controller: _photosController,
               decoration: const InputDecoration(
-                hintText:
-                    'Uma URL por linha (pode ser do Firebase Storage futuramente)',
+                hintText: 'URLs de fotos (uma por linha)',
                 border: OutlineInputBorder(),
               ),
               maxLines: 3,
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _pickImages,
+              icon: const Icon(Icons.photo_library),
+              label: Text(
+                _images.isEmpty
+                    ? 'Selecionar imagens'
+                    : 'Selecionar mais imagens (${_images.length} selecionadas)',
+              ),
+            ),
+            const SizedBox(height: 4),
+            if (_images.isNotEmpty)
+              Text(
+                '${_images.length} imagem(ns) selecionada(s) para upload.',
+                style: const TextStyle(fontSize: 12, color: Colors.black54),
+              ),
             const SizedBox(height: 12),
 
             if (_errorText != null) ...[

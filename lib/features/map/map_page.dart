@@ -1,12 +1,19 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 import '../../models/area_feature.dart';
 import '../../utils/geo.dart';
 import '../../utils/price_color.dart';
 
 import '../auth/auth_providers.dart';
+import '../../data/firestore_api.dart';
 
 import 'map_controller.dart';
 import 'widgets/legend.dart';
@@ -23,8 +30,9 @@ class MapPage extends ConsumerStatefulWidget {
 class _MapPageState extends ConsumerState<MapPage> {
   GoogleMapController? _controller;
 
-  /// Evita abrir múltiplos modais de avaliação ao mesmo tempo
   bool _addingRating = false;
+
+  static const _mapsApiKey = String.fromEnvironment('MAPS_API_KEY');
 
   LatLng get _center => const LatLng(-26.485, -49.066); // Jaraguá do Sul
 
@@ -40,28 +48,41 @@ class _MapPageState extends ConsumerState<MapPage> {
       body: Stack(
         children: [
           areasAsync.when(
-            data: (areas) => GoogleMap(
-              initialCameraPosition: CameraPosition(target: _center, zoom: 12),
-              onMapCreated: (c) => _controller = c,
-              myLocationButtonEnabled: false,
-              mapToolbarEnabled: false,
-              zoomControlsEnabled: false,
-              polygons: _buildPolygons(areas, priceMode),
-              markers: _buildMarkers(areas),
-
-              onTap: (pos) {
-                if (addMode) {
-                  _onTapAddRating(context, areas, pos);
-                }
-              },
-              onLongPress: (pos) {
-                if (!addMode) {
-                  _onLongPressAddRating(context, areas, pos);
-                }
-              },
-            ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, st) => Center(child: Text('Erro ao carregar mapa: $e')),
+            data: (areas) {
+              debugPrint('[MAP] areas loaded: ${areas.length}');
+              return GoogleMap(
+                initialCameraPosition: CameraPosition(target: _center, zoom: 12),
+                onMapCreated: (c) {
+                  debugPrint('[MAP] onMapCreated');
+                  _controller = c;
+                },
+                myLocationButtonEnabled: false,
+                mapToolbarEnabled: false,
+                zoomControlsEnabled: false,
+                polygons: _buildPolygons(areas, priceMode),
+                markers: _buildMarkers(areas),
+                onTap: (pos) {
+                  debugPrint('[MAP] onTap at ${pos.latitude},${pos.longitude}');
+                  if (addMode) {
+                    _onTapAddRating(context, areas, pos);
+                  }
+                },
+                onLongPress: (pos) {
+                  debugPrint('[MAP] onLongPress at ${pos.latitude},${pos.longitude}');
+                  if (!addMode) {
+                    _onLongPressAddRating(context, areas, pos);
+                  }
+                },
+              );
+            },
+            loading: () {
+              debugPrint('[MAP] areas loading...');
+              return const Center(child: CircularProgressIndicator());
+            },
+            error: (e, st) {
+              debugPrint('[MAP] error loading areas: $e\n$st');
+              return Center(child: Text('Erro ao carregar mapa: $e'));
+            },
           ),
 
           // topo esquerdo: modo + legenda
@@ -72,8 +93,10 @@ class _MapPageState extends ConsumerState<MapPage> {
               children: [
                 ModeToggle(
                   value: priceMode,
-                  onChanged: (m) =>
-                      ref.read(priceModeProvider.notifier).state = m,
+                  onChanged: (m) {
+                    debugPrint('[UI] priceMode changed to $m');
+                    ref.read(priceModeProvider.notifier).state = m;
+                  },
                 ),
                 const SizedBox(width: 12),
                 if (legendVisible) Legend(mode: priceMode),
@@ -103,15 +126,16 @@ class _MapPageState extends ConsumerState<MapPage> {
         ],
       ),
 
-      // FABs: Nova avaliação + legenda + modo adicionar
+      // FABs
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // NOVA AVALIAÇÃO (sem precisar tocar no mapa)
+          // NOVA AVALIAÇÃO
           FloatingActionButton.extended(
             heroTag: 'newRatingFab',
             onPressed: () async {
+              debugPrint('[FAB] Nova avaliação clicado');
               final areasValue = ref.read(areasProvider);
               final areas = areasValue.maybeWhen(
                 data: (value) => value,
@@ -119,6 +143,7 @@ class _MapPageState extends ConsumerState<MapPage> {
               );
 
               if (areas.isEmpty) {
+                debugPrint('[FAB] Nenhuma área carregada para nova avaliação');
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Nenhum bairro cadastrado no mapa ainda.'),
@@ -127,7 +152,6 @@ class _MapPageState extends ConsumerState<MapPage> {
                 return;
               }
 
-              // Usa o centro da câmera como referência
               final pos = _center;
               await _handleAddRatingFlow(
                 context,
@@ -141,12 +165,14 @@ class _MapPageState extends ConsumerState<MapPage> {
           ),
           const SizedBox(height: 12),
 
-          // FAB legenda
+          // Legenda
           FloatingActionButton.extended(
             heroTag: 'legendFab',
             onPressed: () {
               final current = ref.read(legendVisibleProvider);
-              ref.read(legendVisibleProvider.notifier).state = !current;
+              final next = !current;
+              debugPrint('[FAB] legend toggled: $next');
+              ref.read(legendVisibleProvider.notifier).state = next;
             },
             icon: Icon(
                 legendVisible ? Icons.visibility_off : Icons.visibility),
@@ -155,12 +181,14 @@ class _MapPageState extends ConsumerState<MapPage> {
           ),
           const SizedBox(height: 12),
 
-          // FAB modo adicionar por toque
+          // Modo adicionar por toque
           FloatingActionButton.extended(
             heroTag: 'addModeFab',
             onPressed: () {
               final current = ref.read(addRatingModeProvider);
-              ref.read(addRatingModeProvider.notifier).state = !current;
+              final next = !current;
+              debugPrint('[FAB] addRatingMode toggled: $next');
+              ref.read(addRatingModeProvider.notifier).state = next;
 
               if (!current) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -203,8 +231,8 @@ class _MapPageState extends ConsumerState<MapPage> {
           fillColor: Color(color).withOpacity(0.55),
           consumeTapEvents: true,
           onTap: () {
-            // se já estamos no fluxo de adicionar, ignora tap em polígono
             if (_addingRating) return;
+            debugPrint('[MAP] polygon tapped: ${a.id} (${a.name})');
             _showAreaInfo(a, mode);
           },
         ),
@@ -232,6 +260,7 @@ class _MapPageState extends ConsumerState<MapPage> {
       }
     }
 
+    debugPrint('[MAP] markers count: ${markers.length}');
     return markers;
   }
 
@@ -241,6 +270,8 @@ class _MapPageState extends ConsumerState<MapPage> {
     final lng = a.polygon.map((p) => p[1]).reduce((v, e) => v + e) /
         a.polygon.length;
     final price = mode == PriceMode.rent ? a.avgRent : a.avgBuy;
+
+    debugPrint('[INFO] showAreaInfo: ${a.id} (${a.name}), center=$lat,$lng');
 
     _controller?.animateCamera(
       CameraUpdate.newLatLngZoom(LatLng(lat, lng), 14),
@@ -276,6 +307,7 @@ class _MapPageState extends ConsumerState<MapPage> {
     List<AreaFeature> areas,
     LatLng pos,
   ) async {
+    debugPrint('[FLOW] longPress addRating at ${pos.latitude},${pos.longitude}');
     await _handleAddRatingFlow(context, areas, pos);
   }
 
@@ -284,10 +316,118 @@ class _MapPageState extends ConsumerState<MapPage> {
     List<AreaFeature> areas,
     LatLng pos,
   ) async {
+    debugPrint('[FLOW] tap addRating (modo adicionar) at ${pos.latitude},${pos.longitude}');
     await _handleAddRatingFlow(context, areas, pos);
 
     if (mounted) {
       ref.read(addRatingModeProvider.notifier).state = false;
+      debugPrint('[FLOW] addRatingMode set to false after tap');
+    }
+  }
+
+  Future<List<String>> _uploadRatingImages(
+    String areaId,
+    String? userId,
+    List<XFile> images,
+  ) async {
+    final storage = FirebaseStorage.instance;
+    final List<String> urls = [];
+
+    debugPrint('[UPLOAD] start upload for ${images.length} image(s) '
+        'areaId=$areaId userId=$userId');
+
+    for (var i = 0; i < images.length; i++) {
+      final file = images[i];
+      final path =
+          'ratings/$areaId/${userId ?? 'anon'}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+
+      try {
+        debugPrint('[UPLOAD] uploading #$i to path: $path');
+        final ref = storage.ref().child(path);
+        final bytes = await file.readAsBytes();
+        final metadata = SettableMetadata(contentType: 'image/jpeg');
+        final task = await ref.putData(bytes, metadata);
+        debugPrint('[UPLOAD] upload complete, bytes: ${task.bytesTransferred}');
+        final url = await ref.getDownloadURL();
+        debugPrint('[UPLOAD] download URL: $url');
+        urls.add(url);
+      } catch (e, st) {
+        debugPrint('[UPLOAD][ERROR] Failed to upload image #$i: $e\n$st');
+        // não lança erro, só loga e segue com as demais imagens
+      }
+    }
+
+    debugPrint('[UPLOAD] finished with ${urls.length} URL(s)');
+    return urls;
+  }
+
+  Future<(String? address, String? cep)> _reverseGeocode(
+    double lat,
+    double lng,
+  ) async {
+    if (_mapsApiKey.isEmpty) {
+      debugPrint('[GEO] MAPS_API_KEY is empty, skipping reverse geocode');
+      return (null, null);
+    }
+
+    try {
+      final uri = Uri.https(
+        'maps.googleapis.com',
+        '/maps/api/geocode/json',
+        {
+          'latlng': '$lat,$lng',
+          'key': _mapsApiKey,
+          'language': 'pt-BR',
+          'region': 'br',
+        },
+      );
+
+      debugPrint('[GEO] reverse geocode request: $uri');
+
+      final resp = await http.get(uri);
+      debugPrint('[GEO] HTTP ${resp.statusCode}');
+
+      if (resp.statusCode != 200) {
+        debugPrint('[GEO][ERROR] Non-200 response: ${resp.body}');
+        return (null, null);
+      }
+
+      final json = jsonDecode(resp.body) as Map<String, dynamic>;
+      final status = json['status'] as String?;
+      debugPrint('[GEO] status: $status');
+
+      if (status != 'OK') {
+        final err = json['error_message'];
+        debugPrint('[GEO][ERROR] status=$status error_message=$err');
+        return (null, null);
+      }
+
+      final results = json['results'] as List<dynamic>;
+      if (results.isEmpty) {
+        debugPrint('[GEO][ERROR] No results');
+        return (null, null);
+      }
+
+      final first = results[0] as Map<String, dynamic>;
+      final formatted = first['formatted_address'] as String;
+      debugPrint('[GEO] formatted_address: $formatted');
+
+      String? cep;
+      final components = first['address_components'] as List<dynamic>;
+      for (final c in components) {
+        final comp = c as Map<String, dynamic>;
+        final types = (comp['types'] as List<dynamic>).cast<String>();
+        if (types.contains('postal_code')) {
+          cep = comp['short_name'] as String;
+          debugPrint('[GEO] found postal_code: $cep');
+          break;
+        }
+      }
+
+      return (formatted, cep);
+    } catch (e, st) {
+      debugPrint('[GEO][EXCEPTION] $e\n$st');
+      return (null, null);
     }
   }
 
@@ -297,8 +437,12 @@ class _MapPageState extends ConsumerState<MapPage> {
     LatLng pos, {
     bool fromFab = false,
   }) async {
-    if (_addingRating) return; // já tem modal aberto, não abre outro
+    if (_addingRating) {
+      debugPrint('[FLOW] _handleAddRatingFlow aborted: already adding');
+      return;
+    }
     if (areas.isEmpty) {
+      debugPrint('[FLOW][ERROR] no areas loaded');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Nenhum bairro cadastrado no mapa.')),
@@ -306,19 +450,24 @@ class _MapPageState extends ConsumerState<MapPage> {
       return;
     }
 
+    debugPrint('[FLOW] _handleAddRatingFlow start at '
+        '${pos.latitude},${pos.longitude} fromFab=$fromFab');
+
     _addingRating = true;
     try {
-      // 1) tentar achar área pelo polígono
+      // 1) achar área
       AreaFeature? target;
       for (final a in areas) {
         if (pointInPolygon(pos.latitude, pos.longitude, a.polygon)) {
           target = a;
+          debugPrint('[FLOW] point inside polygon: ${a.id} (${a.name})');
           break;
         }
       }
 
-      // 2) se não caiu dentro de nenhum polígono, escolhe área mais próxima (pelo centróide)
+      // fallback: área mais próxima
       if (target == null) {
+        debugPrint('[FLOW] point outside all polygons, searching nearest area');
         double? bestDist;
         for (final a in areas) {
           final lat = a.polygon.map((p) => p[0]).reduce((v, e) => v + e) /
@@ -335,9 +484,13 @@ class _MapPageState extends ConsumerState<MapPage> {
             target = a;
           }
         }
+        if (target != null) {
+          debugPrint('[FLOW] nearest area: ${target!.id} (${target!.name})');
+        }
       }
 
       if (target == null) {
+        debugPrint('[FLOW][ERROR] still no target area');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -346,21 +499,34 @@ class _MapPageState extends ConsumerState<MapPage> {
         return;
       }
 
-      // posição a ser salva — se for via FAB, usa o centro do bairro
+      // posição default p/ marker
       LatLng ratingPos = pos;
       if (fromFab) {
-        final lat = target!.polygon
-                .map((p) => p[0])
-                .reduce((v, e) => v + e) /
+        final lat = target!.polygon.map((p) => p[0]).reduce((v, e) => v + e) /
             target!.polygon.length;
-        final lng = target!.polygon
-                .map((p) => p[1])
-                .reduce((v, e) => v + e) /
+        final lng = target!.polygon.map((p) => p[1]).reduce((v, e) => v + e) /
             target!.polygon.length;
         ratingPos = LatLng(lat, lng);
+        debugPrint('[FLOW] fromFab: using area center $lat,$lng as ratingPos');
       }
 
+      // 2) tentar reverse geocoding
+      debugPrint('[FLOW] calling reverseGeocode for '
+          '${ratingPos.latitude},${ratingPos.longitude}');
+      final (addr, cep) =
+          await _reverseGeocode(ratingPos.latitude, ratingPos.longitude);
+      final initialAddress = addr ?? target.name;
+      final initialCep = cep ?? '';
+
+      debugPrint('[FLOW] initialAddress="$initialAddress", initialCep="$initialCep"');
+
       if (!mounted) return;
+
+      final auth = ref.read(firebaseAuthProvider);
+      final user = auth.currentUser;
+      debugPrint('[FLOW] currentUser: ${user?.uid} (${user?.email})');
+
+      // 3) abrir bottom sheet
       final result = await showModalBottomSheet<AddRatingResult>(
         context: context,
         isScrollControlled: true,
@@ -369,48 +535,85 @@ class _MapPageState extends ConsumerState<MapPage> {
         ),
         builder: (_) => AddRatingSheet(
           areaName: target!.name,
-          // localização pré-preenchida quando vem de clique em área/bairro
           initialLocationType: 'bairro',
-          initialAddress: target!.name,
-          // se você tiver CEP no AreaFeature depois, pode passar aqui
-          initialCep: null,
+          initialAddress: initialAddress,
+          initialCep: initialCep,
         ),
       );
 
+      debugPrint('[FLOW] bottom sheet closed, result is ${result == null ? 'null' : 'not null'}');
+
       if (result == null) return;
 
-      // 3) salvar no Firestore com usuário logado e todos os campos novos
-      final api = ref.read(firestoreApiProvider);
-      final auth = ref.read(firebaseAuthProvider);
-      final user = auth.currentUser;
+      // 4) upload imagens
+      List<String> uploadedUrls = [];
+      if (result.localImages.isNotEmpty) {
+        debugPrint('[FLOW] uploading ${result.localImages.length} image(s)');
+        uploadedUrls =
+            await _uploadRatingImages(target.id, user?.uid, result.localImages);
+      } else {
+        debugPrint('[FLOW] no localImages to upload');
+      }
 
-      await api.addRating(
-        areaId: target.id,
-        lat: ratingPos.latitude,
-        lng: ratingPos.longitude,
-        score: result.score,
-        comment: result.comment,
-        userId: user?.uid,
-        locationType: result.locationType,
-        address: result.address,
-        cep: result.cep,
-        buyPrice: result.buyPrice,
-        rentPrice: result.rentPrice,
-        listingLinks: result.listingLinks,
-        photoUrls: result.photoUrls,
-        bedrooms: result.bedrooms,
-        areaM2: result.areaM2,
-        bathrooms: result.bathrooms,
-      );
+      final allPhotoUrls = [
+        ...result.photoUrls,
+        ...uploadedUrls,
+      ];
+
+      final api = ref.read(firestoreApiProvider);
+
+      debugPrint('[FLOW] saving rating to Firestore for areaId=${target.id}');
+      try {
+        await api.addRating(
+          areaId: target.id,
+          lat: ratingPos.latitude,
+          lng: ratingPos.longitude,
+          score: result.score,
+          comment: result.comment,
+          userId: user?.uid,
+          locationType: result.locationType,
+          address: result.address,
+          cep: result.cep,
+          buyPrice: result.buyPrice,
+          rentPrice: result.rentPrice,
+          listingLinks: result.listingLinks,
+          photoUrls: allPhotoUrls,
+          bedrooms: result.bedrooms,
+          areaM2: result.areaM2,
+          bathrooms: result.bathrooms,
+        );
+        debugPrint('[FLOW] rating saved successfully');
+      } catch (e, st) {
+        debugPrint('[FLOW][ERROR] Failed to save rating: $e\n$st');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erro ao salvar avaliação no Firebase.'),
+          ),
+        );
+        return;
+      }
 
       if (!mounted) return;
       ref.invalidate(areasProvider);
+      debugPrint('[FLOW] areasProvider invalidated (reload areas)');
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Avaliação adicionada!')),
       );
+    } catch (e, st) {
+      debugPrint('[FLOW][UNCAUGHT] $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Erro inesperado ao adicionar avaliação. Veja logs.'),
+          ),
+        );
+      }
     } finally {
       _addingRating = false;
+      debugPrint('[FLOW] _handleAddRatingFlow end, _addingRating=false');
     }
   }
 }
