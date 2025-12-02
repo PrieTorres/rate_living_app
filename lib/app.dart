@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'features/auth/auth_gate.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/signup_page.dart';
 import 'features/map/map_page.dart';
 import 'features/ranking/ranking_page.dart';
 import 'features/property/property_detail_page.dart';
+import 'features/user/user_profile_page.dart';
 import 'models/rating.dart';
 
 class RateLivingApp extends StatelessWidget {
@@ -37,6 +37,7 @@ class RateLivingApp extends StatelessWidget {
             body: Center(child: Text('Imóvel não fornecido.')),
           );
         },
+        '/profile': (context) => const UserProfilePage(),
       },
     );
   }

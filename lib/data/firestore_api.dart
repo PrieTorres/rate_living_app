@@ -17,19 +17,15 @@ class FirestoreApi {
 
   Future<List<AreaFeature>> fetchAreas() async {
     final areasSnap = await _db.collection('areas').get();
-
     final List<AreaFeature> areas = [];
-
     for (final doc in areasSnap.docs) {
       final data = doc.data();
-
       final polygon = (data['polygon'] as List)
           .map((p) => [
                 (p['lat'] as num).toDouble(),
                 (p['lng'] as num).toDouble(),
               ])
           .toList();
-
       final ratingsSnap = await doc.reference.collection('ratings').get();
       final ratings = ratingsSnap.docs.map((rDoc) {
         final rd = rDoc.data();
@@ -56,7 +52,6 @@ class FirestoreApi {
           bathrooms: (rd['bathrooms'] as num?)?.toInt(),
         );
       }).toList();
-
       areas.add(
         AreaFeature(
           id: doc.id,
@@ -68,7 +63,6 @@ class FirestoreApi {
         ),
       );
     }
-
     return areas;
   }
 
@@ -110,5 +104,17 @@ class FirestoreApi {
       'createdAt': FieldValue.serverTimestamp(),
       'source': 'user',
     });
+  }
+
+  Future<void> deleteRating({
+    required String areaId,
+    required String ratingId,
+  }) async {
+    await _db
+        .collection('areas')
+        .doc(areaId)
+        .collection('ratings')
+        .doc(ratingId)
+        .delete();
   }
 }
