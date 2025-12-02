@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'features/auth/auth_gate.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/signup_page.dart';

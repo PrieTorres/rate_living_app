@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../models/area_feature.dart';
 import '../../models/rating.dart';
 import '../map/map_controller.dart';
 import '../auth/auth_providers.dart';
+import '../../data/firestore_api.dart';
 
 class UserProfilePage extends ConsumerWidget {
   const UserProfilePage({super.key});
@@ -23,6 +23,17 @@ class UserProfilePage extends ConsumerWidget {
         foregroundColor: Colors.black87,
         elevation: 0.5,
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).pop()),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await ref.read(authRepositoryProvider).signOut();
+              if (context.mounted) {
+                Navigator.of(context).pop();
+              }
+            },
+            child: const Text('Sair', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
       ),
       body: areasAsync.when(
         data: (areas) {
@@ -66,17 +77,14 @@ class UserProfilePage extends ConsumerWidget {
                               ),
                               const SizedBox(height: 4),
                               if (user.email != null)
-                                Text(
-                                  user.email!,
-                                  style: const TextStyle(color: Colors.black54),
-                                ),
+                                Text(user.email!, style: const TextStyle(color: Colors.black54)),
                             ],
                           ),
                         ),
                       ],
                     ),
                   const SizedBox(height: 24),
-                  Text('Minhas Avaliações', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const Text('Minhas Avaliações', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
                   if (userRatings.isEmpty)
                     const Text('Você ainda não avaliou nenhum local.', style: TextStyle(color: Colors.black54))
@@ -128,12 +136,7 @@ class UserProfilePage extends ConsumerWidget {
                                         },
                                       );
                                       if (confirm == true) {
-                                        await FirebaseFirestore.instance
-                                            .collection('areas')
-                                            .doc(item.areaId)
-                                            .collection('ratings')
-                                            .doc(rating.id)
-                                            .delete();
+                                        await FirebaseFirestore.instance.collection('areas').doc(item.areaId).collection('ratings').doc(rating.id).delete();
                                         ref.invalidate(areasProvider);
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avaliação excluída.')));
@@ -141,6 +144,73 @@ class UserProfilePage extends ConsumerWidget {
                                       }
                                     },
                                     icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                  ),
+                                  IconButton(
+                                    onPressed: () async {
+                                      final result = await showDialog<_EditRatingResult?>(
+                                        context: context,
+                                        builder: (ctx) {
+                                          int newScore = rating.score;
+                                          final commentController = TextEditingController(text: rating.comment ?? '');
+                                          return AlertDialog(
+                                            title: const Text('Editar avaliação'),
+                                            content: StatefulBuilder(
+                                              builder: (ctx2, setState2) {
+                                                return Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      children: List.generate(5, (i) {
+                                                        final filled = i < newScore;
+                                                        return IconButton(
+                                                          padding: EdgeInsets.zero,
+                                                          visualDensity: VisualDensity.compact,
+                                                          onPressed: () {
+                                                            setState2(() => newScore = i + 1);
+                                                          },
+                                                          icon: Icon(filled ? Icons.star : Icons.star_border),
+                                                          color: filled ? Colors.orange : Colors.grey,
+                                                        );
+                                                      }),
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    TextField(
+                                                      controller: commentController,
+                                                      decoration: const InputDecoration(labelText: 'Comentário', border: OutlineInputBorder()),
+                                                      maxLines: 3,
+                                                    ),
+                                                  ],
+                                                );
+                                              },
+                                            ),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.of(ctx).pop(_EditRatingResult(score: newScore, comment: commentController.text.trim()));
+                                                },
+                                                child: const Text('Salvar'),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      );
+                                      if (result != null) {
+                                        final api = ref.read(firestoreApiProvider);
+                                        await api.updateRating(
+                                          areaId: item.areaId,
+                                          ratingId: rating.id,
+                                          score: result.score,
+                                          comment: result.comment.isEmpty ? null : result.comment,
+                                        );
+                                        ref.invalidate(areasProvider);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avaliação atualizada.')));
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(Icons.edit, color: Colors.blueAccent),
                                   ),
                                 ],
                               ),
@@ -164,6 +234,12 @@ class UserProfilePage extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _EditRatingResult {
+  final int score;
+  final String comment;
+  _EditRatingResult({required this.score, required this.comment});
 }
 
 class _UserRating {

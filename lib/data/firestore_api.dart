@@ -6,13 +6,9 @@ import '../models/rating.dart';
 
 class FirestoreApi {
   late final FirebaseFirestore _db;
-
   FirestoreApi() {
     final app = Firebase.app();
-    _db = FirebaseFirestore.instanceFor(
-      app: app,
-      databaseId: 'ratelivingdb',
-    );
+    _db = FirebaseFirestore.instanceFor(app: app, databaseId: 'ratelivingdb');
   }
 
   Future<List<AreaFeature>> fetchAreas() async {
@@ -21,10 +17,7 @@ class FirestoreApi {
     for (final doc in areasSnap.docs) {
       final data = doc.data();
       final polygon = (data['polygon'] as List)
-          .map((p) => [
-                (p['lat'] as num).toDouble(),
-                (p['lng'] as num).toDouble(),
-              ])
+          .map((p) => [(p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()])
           .toList();
       final ratingsSnap = await doc.reference.collection('ratings').get();
       final ratings = ratingsSnap.docs.map((rDoc) {
@@ -41,12 +34,8 @@ class FirestoreApi {
           cep: rd['cep'] as String?,
           buyPrice: (rd['buyPrice'] as num?)?.toDouble(),
           rentPrice: (rd['rentPrice'] as num?)?.toDouble(),
-          listingLinks:
-              (rd['listingLinks'] as List?)?.map((e) => e.toString()).toList() ??
-                  const [],
-          photoUrls:
-              (rd['photoUrls'] as List?)?.map((e) => e.toString()).toList() ??
-                  const [],
+          listingLinks: (rd['listingLinks'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+          photoUrls: (rd['photoUrls'] as List?)?.map((e) => e.toString()).toList() ?? const [],
           bedrooms: (rd['bedrooms'] as num?)?.toInt(),
           areaM2: (rd['areaM2'] as num?)?.toDouble(),
           bathrooms: (rd['bathrooms'] as num?)?.toInt(),
@@ -106,15 +95,20 @@ class FirestoreApi {
     });
   }
 
+  Future<void> updateRating({
+    required String areaId,
+    required String ratingId,
+    required int score,
+    String? comment,
+  }) async {
+    final docRef = _db.collection('areas').doc(areaId).collection('ratings').doc(ratingId);
+    await docRef.update({'score': score, 'comment': comment});
+  }
+
   Future<void> deleteRating({
     required String areaId,
     required String ratingId,
   }) async {
-    await _db
-        .collection('areas')
-        .doc(areaId)
-        .collection('ratings')
-        .doc(ratingId)
-        .delete();
+    await _db.collection('areas').doc(areaId).collection('ratings').doc(ratingId).delete();
   }
 }

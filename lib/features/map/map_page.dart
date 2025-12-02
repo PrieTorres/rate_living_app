@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+
 import '../../models/area_feature.dart';
 import '../../utils/geo.dart';
 import '../../utils/price_color.dart';
@@ -27,6 +28,9 @@ class _MapPageState extends ConsumerState<MapPage> {
   bool _addingRating = false;
   static const _mapsApiKey = String.fromEnvironment('MAPS_API_KEY');
   LatLng get _center => const LatLng(-26.485, -49.066);
+
+  // Armazena a posição central atual da câmera do mapa
+  LatLng? _currentCenter;
 
   @override
   Widget build(BuildContext context) {
@@ -86,10 +90,13 @@ class _MapPageState extends ConsumerState<MapPage> {
           areasAsync.when(
             data: (areas) {
               return GoogleMap(
-                initialCameraPosition:
-                    CameraPosition(target: _center, zoom: 12),
+                initialCameraPosition: CameraPosition(target: _center, zoom: 12),
                 onMapCreated: (c) {
                   _controller = c;
+                },
+                onCameraMove: (position) {
+                  // Atualiza a posição central atual do mapa para usar no FAB
+                  _currentCenter = position.target;
                 },
                 myLocationButtonEnabled: false,
                 mapToolbarEnabled: false,
@@ -108,12 +115,8 @@ class _MapPageState extends ConsumerState<MapPage> {
                 },
               );
             },
-            loading: () {
-              return const Center(child: CircularProgressIndicator());
-            },
-            error: (e, st) {
-              return Center(child: Text('Erro ao carregar mapa: $e'));
-            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, st) => Center(child: Text('Erro ao carregar mapa: $e')),
           ),
           Positioned(
             top: 12,
@@ -165,7 +168,8 @@ class _MapPageState extends ConsumerState<MapPage> {
                 );
                 return;
               }
-              final pos = _center;
+              // Usa a posição atual do centro da câmera, se disponível, ao invés de um valor fixo
+              final pos = _currentCenter ?? _center;
               await _handleAddRatingFlow(
                 context,
                 areas,
@@ -345,12 +349,42 @@ class _MapPageState extends ConsumerState<MapPage> {
         final ref = storage.ref().child(path);
         final bytes = await file.readAsBytes();
         final metadata = SettableMetadata(contentType: 'image/jpeg');
-        final task = await ref.putData(bytes, metadata);
+        await ref.putData(bytes, metadata);
         final url = await ref.getDownloadURL();
         urls.add(url);
       } catch (_) {}
     }
     return urls;
+  }
+
+  // Realiza geocodificação a partir de um CEP para obter lat/lng
+  Future<LatLng?> _geocodeCep(String cep) async {
+    if (_mapsApiKey.isEmpty) return null;
+    try {
+      final uri = Uri.https(
+        'maps.googleapis.com',
+        '/maps/api/geocode/json',
+        {
+          'address': cep,
+          'key': _mapsApiKey,
+          'language': 'pt-BR',
+          'region': 'br',
+        },
+      );
+      final resp = await http.get(uri);
+      if (resp.statusCode != 200) return null;
+      final json = jsonDecode(resp.body) as Map<String, dynamic>;
+      if ((json['status'] as String?) != 'OK') return null;
+      final results = json['results'] as List<dynamic>;
+      if (results.isEmpty) return null;
+      final first = results[0] as Map<String, dynamic>;
+      final location = first['geometry']['location'] as Map<String, dynamic>;
+      final lat = (location['lat'] as num).toDouble();
+      final lng = (location['lng'] as num).toDouble();
+      return LatLng(lat, lng);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<(String? address, String? cep)> _reverseGeocode(
@@ -420,6 +454,7 @@ class _MapPageState extends ConsumerState<MapPage> {
     }
     _addingRating = true;
     try {
+      // Define área inicial a partir da posição clicada
       AreaFeature? target;
       for (final a in areas) {
         if (pointInPolygon(pos.latitude, pos.longitude, a.polygon)) {
@@ -427,6 +462,7 @@ class _MapPageState extends ConsumerState<MapPage> {
           break;
         }
       }
+      // Caso não esteja dentro de nenhum polígono, usa o mais próximo
       if (target == null) {
         double? bestDist;
         for (final a in areas) {
@@ -451,6 +487,8 @@ class _MapPageState extends ConsumerState<MapPage> {
         );
         return;
       }
+
+      // Ajusta a posição de avaliação se o usuário clicou no FAB (centro do bairro)
       LatLng ratingPos = pos;
       if (fromFab) {
         final lat = target!.polygon.map((p) => p[0]).reduce((v, e) => v + e) /
@@ -459,6 +497,8 @@ class _MapPageState extends ConsumerState<MapPage> {
             target!.polygon.length;
         ratingPos = LatLng(lat, lng);
       }
+
+      // Preenche endereço/CEP padrão via reverse geocode, exceto se for pelo FAB
       String? initialAddress;
       String? initialCep;
       if (fromFab) {
@@ -470,6 +510,7 @@ class _MapPageState extends ConsumerState<MapPage> {
         initialAddress = addr ?? target.name;
         initialCep = cep ?? '';
       }
+
       if (!mounted) return;
       final auth = ref.read(firebaseAuthProvider);
       final user = auth.currentUser;
@@ -489,6 +530,27 @@ class _MapPageState extends ConsumerState<MapPage> {
         ),
       );
       if (result == null) return;
+
+      // Se o usuário inseriu um CEP, geocodifica para obter a latitude/longitude
+      LatLng? geocodePos;
+      if (result.cep != null && result.cep!.trim().isNotEmpty) {
+        geocodePos = await _geocodeCep(result.cep!.trim());
+      }
+      if (geocodePos != null) {
+        ratingPos = geocodePos;
+        // Recalcula o bairro com base na nova posição
+        AreaFeature? newTarget;
+        for (final a in areas) {
+          if (pointInPolygon(ratingPos.latitude, ratingPos.longitude, a.polygon)) {
+            newTarget = a;
+            break;
+          }
+        }
+        if (newTarget != null) {
+          target = newTarget;
+        }
+      }
+
       List<String> uploadedUrls = [];
       if (result.localImages.isNotEmpty) {
         uploadedUrls =
@@ -536,7 +598,8 @@ class _MapPageState extends ConsumerState<MapPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Erro inesperado ao adicionar avaliação. Veja logs.'),
+            content:
+                Text('Erro inesperado ao adicionar avaliação. Veja logs.'),
           ),
         );
       }
