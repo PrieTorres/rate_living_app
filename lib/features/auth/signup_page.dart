@@ -38,8 +38,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
       await authRepo.signInWithGoogle();
 
       if (!mounted) return;
-      // Depois do login/cadastro com Google,
-      // o AuthGate vai detectar o usuário logado e mandar pro mapa
+      // AuthGate vai detectar user logado e mandar pro mapa
       Navigator.popUntil(context, ModalRoute.withName('/'));
     } catch (e) {
       if (!mounted) return;
@@ -141,214 +140,226 @@ class _SignupPageState extends ConsumerState<SignupPage> {
     return Scaffold(
       backgroundColor: bgLight,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              // Logo
-              Container(
-                height: 80,
-                width: 80,
-                decoration: BoxDecoration(
-                  color: primary.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.maps_home_work,
-                  color: primary,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Crie sua conta',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1B120E),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Bem-vindo! Insira seus dados abaixo.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 24),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 600;
 
-              _LabeledField(
-                label: 'Nome',
-                controller: _nameController,
-                hintText: 'Digite seu nome completo',
-              ),
-              const SizedBox(height: 16),
-              _LabeledField(
-                label: 'E-mail',
-                controller: _emailController,
-                hintText: 'Digite seu e-mail',
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-              _LabeledPasswordField(
-                label: 'Senha',
-                controller: _passwordController,
-                hintText: 'Crie uma senha',
-              ),
-              const SizedBox(height: 16),
-              _LabeledPasswordField(
-                label: 'Confirmar senha',
-                controller: _confirmController,
-                hintText: 'Confirme sua senha',
-              ),
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Checkbox(
-                    value: _acceptedTerms,
-                    onChanged: (v) {
-                      setState(() {
-                        _acceptedTerms = v ?? false;
-                      });
-                    },
-                    activeColor: primary,
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isWide ? 0 : 24,
+                    vertical: 24,
                   ),
-                  const Expanded(
-                    child: Text(
-                      'Concordo com os Termos de uso',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF64748B),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      // Logo
+                      Container(
+                        height: 80,
+                        width: 80,
+                        decoration: BoxDecoration(
+                          color: primary.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.maps_home_work,
+                          color: primary,
+                          size: 40,
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Crie sua conta',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1B120E),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Bem-vindo! Insira seus dados abaixo.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 24),
 
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _errorMessage!,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+                      _LabeledField(
+                        label: 'Nome',
+                        controller: _nameController,
+                        hintText: 'Digite seu nome completo',
+                      ),
+                      const SizedBox(height: 16),
+                      _LabeledField(
+                        label: 'E-mail',
+                        controller: _emailController,
+                        hintText: 'Digite seu e-mail',
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 16),
+                      _LabeledPasswordField(
+                        label: 'Senha',
+                        controller: _passwordController,
+                        hintText: 'Crie uma senha',
+                      ),
+                      const SizedBox(height: 16),
+                      _LabeledPasswordField(
+                        label: 'Confirmar senha',
+                        controller: _confirmController,
+                        hintText: 'Confirme sua senha',
+                      ),
+                      const SizedBox(height: 12),
 
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _signup,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primary,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _acceptedTerms,
+                            onChanged: (v) {
+                              setState(() {
+                                _acceptedTerms = v ?? false;
+                              });
+                            },
+                            activeColor: primary,
                           ),
-                        )
-                      : const Text('Criar conta'),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // divisor "ou"
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 1,
-                      color: outlineLight.withOpacity(0.7),
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      'ou',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF64748B),
+                          const Expanded(
+                            child: Text(
+                              'Concordo com os Termos de uso',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      height: 1,
-                      color: outlineLight.withOpacity(0.7),
-                    ),
-                  ),
-                ],
-              ),
 
-              const SizedBox(height: 16),
+                      if (_errorMessage != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
 
-              // Botão "Criar conta com Google"
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _loading ? null : _signUpWithGoogle,
-                  icon: Image.network(
-                    'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                    height: 20,
-                  ),
-                  label: const Text(
-                    'Criar conta com Google',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: primary,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                    side: BorderSide(color: primary.withOpacity(0.3)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _loading ? null : _signup,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primary,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          child: _loading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Criar conta'),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // divisor "ou"
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              height: 1,
+                              color: outlineLight.withOpacity(0.7),
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'ou',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Container(
+                              height: 1,
+                              color: outlineLight.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Botão "Criar conta com Google"
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _loading ? null : _signUpWithGoogle,
+                          icon: Image.asset(
+                            'assets/images/google_logo.png',
+                            height: 20,
+                          ),
+                          label: const Text(
+                            'Criar conta com Google',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: primary,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(52),
+                            side: BorderSide(color: primary.withOpacity(0.3)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacementNamed(context, '/login');
+                        },
+                        child: const Text(
+                          'Já tem conta? Entrar',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+                      Container(
+                        height: 1,
+                        color: outlineLight.withOpacity(0.5),
+                      ),
+                    ],
                   ),
                 ),
               ),
-
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-                child: const Text(
-                  'Já tem conta? Entrar',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              Container(
-                height: 1,
-                color: outlineLight.withOpacity(0.5),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -386,6 +397,8 @@ class _LabeledField extends StatelessWidget {
         TextField(
           controller: controller,
           keyboardType: keyboardType,
+          style: TextStyle(color: Color(0xFF956350)),
+          cursorColor: Color(0xFF956350),
           decoration: InputDecoration(
             hintText: hintText,
             border: OutlineInputBorder(
@@ -442,9 +455,7 @@ class _LabeledPasswordFieldState extends State<_LabeledPasswordField> {
           decoration: InputDecoration(
             hintText: widget.hintText,
             suffixIcon: IconButton(
-              icon: Icon(
-                _obscure ? Icons.visibility_off : Icons.visibility,
-              ),
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
               onPressed: () {
                 setState(() {
                   _obscure = !_obscure;
