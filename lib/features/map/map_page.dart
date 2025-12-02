@@ -43,8 +43,16 @@ class _MapPageState extends ConsumerState<MapPage> {
     final addMode = ref.watch(addRatingModeProvider);
     final areasAsync = ref.watch(areasProvider);
 
+    const primary = Color(0xFFE46B3F);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Rate Living – Mapa')),
+      appBar: AppBar(
+        title: const Text('Rate Living – Mapa'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0.5,
+      ),
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
           areasAsync.when(
@@ -121,6 +129,7 @@ class _MapPageState extends ConsumerState<MapPage> {
       ),
 
       // FABs
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -189,6 +198,45 @@ class _MapPageState extends ConsumerState<MapPage> {
           ),
         ],
       ),
+
+      // MENU INFERIOR
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0, // estamos na aba "Mapa"
+        selectedItemColor: primary,
+        unselectedItemColor: Colors.grey.shade600,
+        onTap: (index) {
+          if (index == 0) {
+            // Mapa - já estamos aqui
+            return;
+          } else if (index == 1) {
+            // Rankings
+            debugPrint('[NAV] BottomNav -> Rankings');
+            Navigator.of(context).pushNamed('/ranking');
+          } else if (index == 2) {
+            // Usuário (placeholder por enquanto)
+            debugPrint('[NAV] BottomNav -> User (em breve)');
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Tela de usuário ainda será implementada.'),
+              ),
+            );
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.map_outlined),
+            label: 'Mapa',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.leaderboard_outlined),
+            label: 'Rankings',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            label: 'Usuário',
+          ),
+        ],
+      ),
     );
   }
 
@@ -197,7 +245,6 @@ class _MapPageState extends ConsumerState<MapPage> {
     final set = <Polygon>{};
 
     for (final a in areas) {
-      // usamos apenas para limite de área; cor visual fica invisível
       final path = a.polygon.map((p) => LatLng(p[0], p[1])).toList();
 
       set.add(
@@ -331,7 +378,6 @@ class _MapPageState extends ConsumerState<MapPage> {
         urls.add(url);
       } catch (e, st) {
         debugPrint('[UPLOAD][ERROR] Failed to upload image #$i: $e\n$st');
-        // não lança erro, só loga e segue
       }
     }
 
