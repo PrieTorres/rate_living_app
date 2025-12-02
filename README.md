@@ -21,3 +21,6 @@ flutter run -d chrome # Web
 flutter run -d android # Emulador/dispositivo Android
 # ou
 flutter run -d ios # iOS
+
+flutter run \
+  --dart-define=MAPS_API_KEY=AIzaSyBFf3XVRN3ErEVuzIKb2J3AvYrpNVch9WQ

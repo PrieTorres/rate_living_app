@@ -6,6 +6,8 @@ import '../../models/area_feature.dart';
 import '../../utils/geo.dart';
 import '../../utils/price_color.dart';
 
+import '../auth/auth_providers.dart';
+
 import 'map_controller.dart';
 import 'widgets/legend.dart';
 import 'widgets/mode_toggle.dart';
@@ -21,11 +23,14 @@ class MapPage extends ConsumerStatefulWidget {
 class _MapPageState extends ConsumerState<MapPage> {
   GoogleMapController? _controller;
 
+  /// Evita abrir múltiplos modais de avaliação ao mesmo tempo
+  bool _addingRating = false;
+
   LatLng get _center => const LatLng(-26.485, -49.066); // Jaraguá do Sul
 
   @override
   Widget build(BuildContext context) {
-    final priceMode = ref.watch(priceModeProvider);       // ✅ novo enum
+    final priceMode = ref.watch(priceModeProvider);
     final legendVisible = ref.watch(legendVisibleProvider);
     final addMode = ref.watch(addRatingModeProvider);
     final areasAsync = ref.watch(areasProvider);
@@ -41,17 +46,14 @@ class _MapPageState extends ConsumerState<MapPage> {
               myLocationButtonEnabled: false,
               mapToolbarEnabled: false,
               zoomControlsEnabled: false,
-              polygons: _buildPolygons(areas, priceMode),   // 🔁 aqui trocamos mode → priceMode
+              polygons: _buildPolygons(areas, priceMode),
               markers: _buildMarkers(areas),
 
-              // tap normal → se modo adicionar estiver ativo, abre fluxo
               onTap: (pos) {
                 if (addMode) {
                   _onTapAddRating(context, areas, pos);
                 }
               },
-
-              // se quiser manter long-press mesmo fora do modo
               onLongPress: (pos) {
                 if (!addMode) {
                   _onLongPressAddRating(context, areas, pos);
@@ -69,12 +71,12 @@ class _MapPageState extends ConsumerState<MapPage> {
             child: Row(
               children: [
                 ModeToggle(
-                  value: priceMode,                             // 🔁 aqui
+                  value: priceMode,
                   onChanged: (m) =>
-                      ref.read(priceModeProvider.notifier).state = m, // 🔁 aqui
+                      ref.read(priceModeProvider.notifier).state = m,
                 ),
                 const SizedBox(width: 12),
-                if (legendVisible) Legend(mode: priceMode),     // 🔁 aqui
+                if (legendVisible) Legend(mode: priceMode),
               ],
             ),
           ),
@@ -101,11 +103,45 @@ class _MapPageState extends ConsumerState<MapPage> {
         ],
       ),
 
-      // FABs (legenda + modo adicionar)
+      // FABs: Nova avaliação + legenda + modo adicionar
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // NOVA AVALIAÇÃO (sem precisar tocar no mapa)
+          FloatingActionButton.extended(
+            heroTag: 'newRatingFab',
+            onPressed: () async {
+              final areasValue = ref.read(areasProvider);
+              final areas = areasValue.maybeWhen(
+                data: (value) => value,
+                orElse: () => <AreaFeature>[],
+              );
+
+              if (areas.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Nenhum bairro cadastrado no mapa ainda.'),
+                  ),
+                );
+                return;
+              }
+
+              // Usa o centro da câmera como referência
+              final pos = _center;
+              await _handleAddRatingFlow(
+                context,
+                areas,
+                pos,
+                fromFab: true,
+              );
+            },
+            icon: const Icon(Icons.rate_review),
+            label: const Text('Nova avaliação'),
+          ),
+          const SizedBox(height: 12),
+
+          // FAB legenda
           FloatingActionButton.extended(
             heroTag: 'legendFab',
             onPressed: () {
@@ -114,10 +150,12 @@ class _MapPageState extends ConsumerState<MapPage> {
             },
             icon: Icon(
                 legendVisible ? Icons.visibility_off : Icons.visibility),
-            label: Text(
-                legendVisible ? 'Ocultar legenda' : 'Mostrar legenda'),
+            label:
+                Text(legendVisible ? 'Ocultar legenda' : 'Mostrar legenda'),
           ),
           const SizedBox(height: 12),
+
+          // FAB modo adicionar por toque
           FloatingActionButton.extended(
             heroTag: 'addModeFab',
             onPressed: () {
@@ -148,7 +186,6 @@ class _MapPageState extends ConsumerState<MapPage> {
     );
   }
 
-  // 🔁 troca Mode por PriceMode aqui também
   Set<Polygon> _buildPolygons(List<AreaFeature> areas, PriceMode mode) {
     final set = <Polygon>{};
 
@@ -165,7 +202,11 @@ class _MapPageState extends ConsumerState<MapPage> {
           strokeWidth: 1,
           fillColor: Color(color).withOpacity(0.55),
           consumeTapEvents: true,
-          onTap: () => _showAreaInfo(a, mode),
+          onTap: () {
+            // se já estamos no fluxo de adicionar, ignora tap em polígono
+            if (_addingRating) return;
+            _showAreaInfo(a, mode);
+          },
         ),
       );
     }
@@ -194,15 +235,10 @@ class _MapPageState extends ConsumerState<MapPage> {
     return markers;
   }
 
-  // 🔁 aqui também: Mode → PriceMode
   void _showAreaInfo(AreaFeature a, PriceMode mode) {
-    final lat = a.polygon
-            .map((p) => p[0])
-            .reduce((v, e) => v + e) /
+    final lat = a.polygon.map((p) => p[0]).reduce((v, e) => v + e) /
         a.polygon.length;
-    final lng = a.polygon
-            .map((p) => p[1])
-            .reduce((v, e) => v + e) /
+    final lng = a.polygon.map((p) => p[1]).reduce((v, e) => v + e) /
         a.polygon.length;
     final price = mode == PriceMode.rent ? a.avgRent : a.avgBuy;
 
@@ -258,54 +294,123 @@ class _MapPageState extends ConsumerState<MapPage> {
   Future<void> _handleAddRatingFlow(
     BuildContext context,
     List<AreaFeature> areas,
-    LatLng pos,
-  ) async {
-    AreaFeature? target;
-    for (final a in areas) {
-      if (pointInPolygon(pos.latitude, pos.longitude, a.polygon)) {
-        target = a;
-        break;
-      }
-    }
-
-    if (target == null) {
+    LatLng pos, {
+    bool fromFab = false,
+  }) async {
+    if (_addingRating) return; // já tem modal aberto, não abre outro
+    if (areas.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Toque fora dos bairros cadastrados.')),
+        const SnackBar(content: Text('Nenhum bairro cadastrado no mapa.')),
       );
       return;
     }
 
-    if (!mounted) return;
-    final result = await showModalBottomSheet<AddRatingResult>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: AddRatingSheet(areaName: target!.name),
-      ),
-    );
+    _addingRating = true;
+    try {
+      // 1) tentar achar área pelo polígono
+      AreaFeature? target;
+      for (final a in areas) {
+        if (pointInPolygon(pos.latitude, pos.longitude, a.polygon)) {
+          target = a;
+          break;
+        }
+      }
 
-    if (result == null) return;
+      // 2) se não caiu dentro de nenhum polígono, escolhe área mais próxima (pelo centróide)
+      if (target == null) {
+        double? bestDist;
+        for (final a in areas) {
+          final lat = a.polygon.map((p) => p[0]).reduce((v, e) => v + e) /
+              a.polygon.length;
+          final lng = a.polygon.map((p) => p[1]).reduce((v, e) => v + e) /
+              a.polygon.length;
 
-    final api = ref.read(firestoreApiProvider);
-    await api.addRating(
-      areaId: target.id,
-      lat: pos.latitude,
-      lng: pos.longitude,
-      score: result.score,
-      comment: result.comment,
-    );
+          final dLat = pos.latitude - lat;
+          final dLng = pos.longitude - lng;
+          final dist2 = dLat * dLat + dLng * dLng;
 
-    if (!mounted) return;
-    ref.invalidate(areasProvider);
+          if (bestDist == null || dist2 < bestDist) {
+            bestDist = dist2;
+            target = a;
+          }
+        }
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Avaliação adicionada!')),
-    );
+      if (target == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Não foi possível identificar um bairro.')),
+        );
+        return;
+      }
+
+      // posição a ser salva — se for via FAB, usa o centro do bairro
+      LatLng ratingPos = pos;
+      if (fromFab) {
+        final lat = target!.polygon
+                .map((p) => p[0])
+                .reduce((v, e) => v + e) /
+            target!.polygon.length;
+        final lng = target!.polygon
+                .map((p) => p[1])
+                .reduce((v, e) => v + e) /
+            target!.polygon.length;
+        ratingPos = LatLng(lat, lng);
+      }
+
+      if (!mounted) return;
+      final result = await showModalBottomSheet<AddRatingResult>(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (_) => AddRatingSheet(
+          areaName: target!.name,
+          // localização pré-preenchida quando vem de clique em área/bairro
+          initialLocationType: 'bairro',
+          initialAddress: target!.name,
+          // se você tiver CEP no AreaFeature depois, pode passar aqui
+          initialCep: null,
+        ),
+      );
+
+      if (result == null) return;
+
+      // 3) salvar no Firestore com usuário logado e todos os campos novos
+      final api = ref.read(firestoreApiProvider);
+      final auth = ref.read(firebaseAuthProvider);
+      final user = auth.currentUser;
+
+      await api.addRating(
+        areaId: target.id,
+        lat: ratingPos.latitude,
+        lng: ratingPos.longitude,
+        score: result.score,
+        comment: result.comment,
+        userId: user?.uid,
+        locationType: result.locationType,
+        address: result.address,
+        cep: result.cep,
+        buyPrice: result.buyPrice,
+        rentPrice: result.rentPrice,
+        listingLinks: result.listingLinks,
+        photoUrls: result.photoUrls,
+        bedrooms: result.bedrooms,
+        areaM2: result.areaM2,
+        bathrooms: result.bathrooms,
+      );
+
+      if (!mounted) return;
+      ref.invalidate(areasProvider);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avaliação adicionada!')),
+      );
+    } finally {
+      _addingRating = false;
+    }
   }
 }
