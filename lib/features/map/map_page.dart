@@ -16,7 +16,8 @@ import '../auth/auth_providers.dart';
 import '../../data/firestore_api.dart';
 
 import 'map_controller.dart';
-import 'widgets/legend.dart';
+// Legend escondida por enquanto
+// import 'widgets/legend.dart';
 import 'widgets/mode_toggle.dart';
 import 'widgets/add_rating_sheet.dart';
 
@@ -39,7 +40,6 @@ class _MapPageState extends ConsumerState<MapPage> {
   @override
   Widget build(BuildContext context) {
     final priceMode = ref.watch(priceModeProvider);
-    final legendVisible = ref.watch(legendVisibleProvider);
     final addMode = ref.watch(addRatingModeProvider);
     final areasAsync = ref.watch(areasProvider);
 
@@ -85,22 +85,16 @@ class _MapPageState extends ConsumerState<MapPage> {
             },
           ),
 
-          // topo esquerdo: modo + legenda
+          // topo esquerdo: seletor de modo (aluguel/compra)
           Positioned(
             top: 12,
             left: 12,
-            child: Row(
-              children: [
-                ModeToggle(
-                  value: priceMode,
-                  onChanged: (m) {
-                    debugPrint('[UI] priceMode changed to $m');
-                    ref.read(priceModeProvider.notifier).state = m;
-                  },
-                ),
-                const SizedBox(width: 12),
-                if (legendVisible) Legend(mode: priceMode),
-              ],
+            child: ModeToggle(
+              value: priceMode,
+              onChanged: (m) {
+                debugPrint('[UI] priceMode changed to $m');
+                ref.read(priceModeProvider.notifier).state = m;
+              },
             ),
           ),
 
@@ -131,7 +125,7 @@ class _MapPageState extends ConsumerState<MapPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // NOVA AVALIAÇÃO
+          // NOVA AVALIAÇÃO (sem endereço/CEP pré-preenchidos)
           FloatingActionButton.extended(
             heroTag: 'newRatingFab',
             onPressed: () async {
@@ -162,22 +156,6 @@ class _MapPageState extends ConsumerState<MapPage> {
             },
             icon: const Icon(Icons.rate_review),
             label: const Text('Nova avaliação'),
-          ),
-          const SizedBox(height: 12),
-
-          // Legenda
-          FloatingActionButton.extended(
-            heroTag: 'legendFab',
-            onPressed: () {
-              final current = ref.read(legendVisibleProvider);
-              final next = !current;
-              debugPrint('[FAB] legend toggled: $next');
-              ref.read(legendVisibleProvider.notifier).state = next;
-            },
-            icon: Icon(
-                legendVisible ? Icons.visibility_off : Icons.visibility),
-            label:
-                Text(legendVisible ? 'Ocultar legenda' : 'Mostrar legenda'),
           ),
           const SizedBox(height: 12),
 
@@ -214,21 +192,21 @@ class _MapPageState extends ConsumerState<MapPage> {
     );
   }
 
+  /// Polígonos invisíveis (sem azul), mas ainda clicáveis para lógica de área.
   Set<Polygon> _buildPolygons(List<AreaFeature> areas, PriceMode mode) {
     final set = <Polygon>{};
 
     for (final a in areas) {
-      final price = mode == PriceMode.rent ? a.avgRent : a.avgBuy;
-      final color = priceToColor(mode, price);
+      // usamos apenas para limite de área; cor visual fica invisível
       final path = a.polygon.map((p) => LatLng(p[0], p[1])).toList();
 
       set.add(
         Polygon(
           polygonId: PolygonId(a.id),
           points: path,
-          strokeColor: const Color(0xFF111827),
-          strokeWidth: 1,
-          fillColor: Color(color).withOpacity(0.55),
+          strokeColor: Colors.transparent,
+          strokeWidth: 0,
+          fillColor: Colors.transparent,
           consumeTapEvents: true,
           onTap: () {
             if (_addingRating) return;
@@ -353,7 +331,7 @@ class _MapPageState extends ConsumerState<MapPage> {
         urls.add(url);
       } catch (e, st) {
         debugPrint('[UPLOAD][ERROR] Failed to upload image #$i: $e\n$st');
-        // não lança erro, só loga e segue com as demais imagens
+        // não lança erro, só loga e segue
       }
     }
 
@@ -510,15 +488,27 @@ class _MapPageState extends ConsumerState<MapPage> {
         debugPrint('[FLOW] fromFab: using area center $lat,$lng as ratingPos');
       }
 
-      // 2) tentar reverse geocoding
-      debugPrint('[FLOW] calling reverseGeocode for '
-          '${ratingPos.latitude},${ratingPos.longitude}');
-      final (addr, cep) =
-          await _reverseGeocode(ratingPos.latitude, ratingPos.longitude);
-      final initialAddress = addr ?? target.name;
-      final initialCep = cep ?? '';
+      // 2) endereço inicial / CEP
+      String? initialAddress;
+      String? initialCep;
 
-      debugPrint('[FLOW] initialAddress="$initialAddress", initialCep="$initialCep"');
+      if (fromFab) {
+        // Botão "Nova avaliação" → não preencher nada
+        debugPrint('[FLOW] fromFab=true: skipping reverseGeocode, '
+            'initialAddress/CEP vazios');
+        initialAddress = '';
+        initialCep = '';
+      } else {
+        // Clique no mapa → tenta reverse geocode
+        debugPrint('[FLOW] calling reverseGeocode for '
+            '${ratingPos.latitude},${ratingPos.longitude}');
+        final (addr, cep) =
+            await _reverseGeocode(ratingPos.latitude, ratingPos.longitude);
+        initialAddress = addr ?? target.name;
+        initialCep = cep ?? '';
+        debugPrint('[FLOW] initialAddress="$initialAddress", '
+            'initialCep="$initialCep"');
+      }
 
       if (!mounted) return;
 
@@ -526,10 +516,12 @@ class _MapPageState extends ConsumerState<MapPage> {
       final user = auth.currentUser;
       debugPrint('[FLOW] currentUser: ${user?.uid} (${user?.email})');
 
-      // 3) abrir bottom sheet
+      // 3) abrir bottom sheet (modal travado)
       final result = await showModalBottomSheet<AddRatingResult>(
         context: context,
         isScrollControlled: true,
+        isDismissible: false, // não fecha clicando fora
+        enableDrag: false, // não arrasta pra fechar
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),

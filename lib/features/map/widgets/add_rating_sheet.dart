@@ -76,6 +76,9 @@ class _AddRatingSheetState extends State<AddRatingSheet> {
   final _picker = ImagePicker();
   final List<XFile> _images = [];
 
+  bool get _showPropertyFields =>
+      _locationType == 'imovel' || _locationType == 'condominio';
+
   @override
   void initState() {
     super.initState();
@@ -156,13 +159,21 @@ class _AddRatingSheetState extends State<AddRatingSheet> {
           .toList();
     }
 
-    final buyPrice = parsePrice(_buyPriceController.text);
-    final rentPrice = parsePrice(_rentPriceController.text);
-    final bedrooms = parseInt(_bedroomsController.text);
-    final areaM2 = parseDouble(_areaController.text);
-    final bathrooms = parseInt(_bathroomsController.text);
+    final buyPrice =
+        _showPropertyFields ? parsePrice(_buyPriceController.text) : null;
+    final rentPrice =
+        _showPropertyFields ? parsePrice(_rentPriceController.text) : null;
+    final bedrooms =
+        _showPropertyFields ? parseInt(_bedroomsController.text) : null;
+    final areaM2 =
+        _showPropertyFields ? parseDouble(_areaController.text) : null;
+    final bathrooms =
+        _showPropertyFields ? parseInt(_bathroomsController.text) : null;
 
-    final links = parseLines(_linksController.text);
+    final links = _showPropertyFields
+        ? parseLines(_linksController.text)
+        : <String>[];
+
     final photos = parseLines(_photosController.text);
 
     Navigator.of(context).pop(
@@ -196,11 +207,26 @@ class _AddRatingSheetState extends State<AddRatingSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Nova avaliação em ${widget.areaName}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            // HEADER COM TÍTULO + BOTÃO X
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Nova avaliação em ${widget.areaName}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
 
             // Nota
             const Text('Nota'),
@@ -287,89 +313,95 @@ class _AddRatingSheetState extends State<AddRatingSheet> {
             ),
             const SizedBox(height: 12),
 
-            // Preços
-            const Text('Preços (opcional)'),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _buyPriceController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Compra (R\$)',
-                      border: OutlineInputBorder(),
+            // Preços (somente imóvel/condomínio)
+            if (_showPropertyFields) ...[
+              const Text('Preços (opcional)'),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _buyPriceController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Compra (R\$)',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _rentPriceController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Aluguel (R\$)',
-                      border: OutlineInputBorder(),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _rentPriceController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Aluguel (R\$)',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Dados do imóvel
-            const Text('Dados do imóvel (opcional)'),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _bedroomsController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Quartos',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _bathroomsController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Banheiros',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _areaController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Área (m²)',
-                border: OutlineInputBorder(),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
 
-            // Links
-            const Text('Links de imobiliárias (opcional)'),
-            const SizedBox(height: 4),
-            TextField(
-              controller: _linksController,
-              decoration: const InputDecoration(
-                hintText: 'Uma URL por linha',
-                border: OutlineInputBorder(),
+            // Dados do imóvel (somente imóvel/condomínio)
+            if (_showPropertyFields) ...[
+              const Text('Dados do imóvel (opcional)'),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _bedroomsController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Quartos',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _bathroomsController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Banheiros',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _areaController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Área (m²)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
 
-            // Fotos
+            // Links (somente imóvel/condomínio)
+            if (_showPropertyFields) ...[
+              const Text('Links de imobiliárias (opcional)'),
+              const SizedBox(height: 4),
+              TextField(
+                controller: _linksController,
+                decoration: const InputDecoration(
+                  hintText: 'Uma URL por linha',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Fotos (todos os tipos)
             const Text('Fotos do local (opcional)'),
             const SizedBox(height: 4),
             TextField(
