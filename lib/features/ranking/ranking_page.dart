@@ -18,6 +18,28 @@ class _RankingPageState extends ConsumerState<RankingPage> {
   String? _selectedCity;
   AreaFeature? _selectedArea;
 
+  // Helper: extrai "Bairro, Cidade" a partir do endereço completo
+  String _extractDistrictCity(String? address, String defaultValue) {
+    if (address == null || address.isEmpty) {
+      return defaultValue;
+    }
+    // Ex.: "Rua X, 123 - Bairro, Cidade - UF, CEP, Brasil"
+    final dashParts = address.split(' - ');
+    if (dashParts.length >= 3) {
+      return dashParts[1].trim();
+    }
+    // fallback: tenta pegar último "Bairro, Cidade"
+    final commaParts = address.split(',');
+    if (commaParts.length >= 3) {
+      final district = commaParts[commaParts.length - 3].trim();
+      final cityPart = commaParts[commaParts.length - 2];
+      final cityPieces = cityPart.split(' - ');
+      final city = cityPieces.first.trim();
+      return '$district, $city';
+    }
+    return defaultValue;
+    }
+
   @override
   Widget build(BuildContext context) {
     final areasAsync = ref.watch(areasProvider);
@@ -425,11 +447,16 @@ class _RankingPageState extends ConsumerState<RankingPage> {
         ),
         const SizedBox(height: 12),
         ...top.map(
-          (entry) => _PropertyCard(
-            areaName: entry.area.name,
-            score: entry.rating.score,
-            comment: entry.rating.comment,
-          ),
+          (entry) {
+            final rating = entry.rating;
+            final addr = rating.address;
+            final displayName = _extractDistrictCity(addr, entry.area.name);
+            return _PropertyCard(
+              areaName: displayName,
+              score: rating.score,
+              comment: rating.comment,
+            );
+          },
         ),
       ],
     );

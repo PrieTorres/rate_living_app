@@ -95,7 +95,7 @@ class _MapPageState extends ConsumerState<MapPage> {
                   _controller = c;
                 },
                 onCameraMove: (position) {
-                  // Atualiza a posição central atual do mapa para usar no FAB
+                  // Atualiza a posição central atual do mapa
                   _currentCenter = position.target;
                 },
                 myLocationButtonEnabled: false,
@@ -168,7 +168,7 @@ class _MapPageState extends ConsumerState<MapPage> {
                 );
                 return;
               }
-              // Usa a posição atual do centro da câmera, se disponível, ao invés de um valor fixo
+              // usa o centro atual da câmera (ou _center se ainda não movido)
               final pos = _currentCenter ?? _center;
               await _handleAddRatingFlow(
                 context,
@@ -357,7 +357,7 @@ class _MapPageState extends ConsumerState<MapPage> {
     return urls;
   }
 
-  // Realiza geocodificação a partir de um CEP para obter lat/lng
+  // Faz geocodificação de um CEP para obter lat/lng
   Future<LatLng?> _geocodeCep(String cep) async {
     if (_mapsApiKey.isEmpty) return null;
     try {
@@ -454,7 +454,7 @@ class _MapPageState extends ConsumerState<MapPage> {
     }
     _addingRating = true;
     try {
-      // Define área inicial a partir da posição clicada
+      // Determina a área inicial pelo clique
       AreaFeature? target;
       for (final a in areas) {
         if (pointInPolygon(pos.latitude, pos.longitude, a.polygon)) {
@@ -462,7 +462,7 @@ class _MapPageState extends ConsumerState<MapPage> {
           break;
         }
       }
-      // Caso não esteja dentro de nenhum polígono, usa o mais próximo
+      // Se não encontrou, seleciona o bairro mais próximo
       if (target == null) {
         double? bestDist;
         for (final a in areas) {
@@ -488,7 +488,7 @@ class _MapPageState extends ConsumerState<MapPage> {
         return;
       }
 
-      // Ajusta a posição de avaliação se o usuário clicou no FAB (centro do bairro)
+      // Ajusta a posição se for FAB (centro do bairro)
       LatLng ratingPos = pos;
       if (fromFab) {
         final lat = target!.polygon.map((p) => p[0]).reduce((v, e) => v + e) /
@@ -498,7 +498,7 @@ class _MapPageState extends ConsumerState<MapPage> {
         ratingPos = LatLng(lat, lng);
       }
 
-      // Preenche endereço/CEP padrão via reverse geocode, exceto se for pelo FAB
+      // Prepara endereço/CEP para exibir na planilha (inicialmente via reverse geocode, exceto se for FAB)
       String? initialAddress;
       String? initialCep;
       if (fromFab) {
@@ -531,10 +531,10 @@ class _MapPageState extends ConsumerState<MapPage> {
       );
       if (result == null) return;
 
-      // Se o usuário inseriu um CEP, geocodifica para obter a latitude/longitude
+      // Se o usuário informou um CEP, geocodifica para obter lat/lon
       LatLng? geocodePos;
-      if (result.cep != null && result.cep!.trim().isNotEmpty) {
-        geocodePos = await _geocodeCep(result.cep!.trim());
+      if (result.cep != null && result.cep.trim().isNotEmpty) {
+        geocodePos = await _geocodeCep(result.cep.trim());
       }
       if (geocodePos != null) {
         ratingPos = geocodePos;
